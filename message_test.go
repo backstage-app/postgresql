@@ -98,7 +98,7 @@ func Test_Messages_Returns_Correct_Number_Of_Messages(t *testing.T) {
 	packet := packet{data, originFrontend}
 
 	messages := packet.messages()
-	if len(messages) != 2 {
+	if len(messages) != 4 {
 		t.Errorf("Expected 2 queries in packet, but got %d", len(messages))
 	}
 }

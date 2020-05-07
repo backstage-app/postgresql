@@ -36,8 +36,18 @@ func (p *packet) messages() []interface{} {
 			messages = append(messages, msg)
 			continue
 		}
+		if p.Origin == originFrontend && isBindMessage(packet) {
+			msg, _ := decodeBindMessage(packet)
+			messages = append(messages, msg)
+			continue
+		}
 		if p.Origin == originBackend && isErrorMessage(packet) {
 			messages = append(messages, decodeErrorMessage(packet))
+			continue
+		}
+		if p.Origin == originBackend && isCommandCompleteMessage(packet) {
+			msg, _ := decodeCommandCompleteMessage(packet)
+			messages = append(messages, msg)
 			continue
 		}
 	}

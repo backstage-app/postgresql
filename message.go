@@ -12,21 +12,22 @@ type oid uint32
 type format uint16
 
 const (
+	oidInt8   oid = 20
+	oidFloat8 oid = 701
+	oidJsonb  oid = 3802
+
 	fieldSeverity1 = 0x53 //S
 	fieldSeverity2 = 0x56 //V
 	fieldCode      = 0x34 //C
 	fieldMessage   = 0x4d //M
 
-	parseMessageType = 0x50
-	errorMessageType = 0x45
-	commandCompleteMessageType = 0x43
-
-	oidInt8   oid = 20
-	oidFloat8 oid = 701
-	oidJsonb  oid = 3802
-
 	formatText   format = 0x00
 	formatBinary format = 0x01
+
+	bindMessageType            = 0x42
+	parseMessageType           = 0x50
+	errorMessageType           = 0x45
+	commandCompleteMessageType = 0x43
 )
 
 // CommandComplete (B)
@@ -37,7 +38,7 @@ type commandCompleteMessage struct {
 }
 
 // isCommandCompleteMessage returns true if data is CommandComplete message.
-func isCommandCompleteMessage(data []byte) bool  {
+func isCommandCompleteMessage(data []byte) bool {
 	if len(data) < 5 {
 		return false
 	}
@@ -140,6 +141,17 @@ type bindMessage struct {
 	valuesNum  uint16
 	formats    []format
 	values     [][]byte
+}
+
+func isBindMessage(data []byte) bool {
+	if len(data) < 5 {
+		return false
+	}
+	if data[0] != bindMessageType {
+		return false
+	}
+	pktLen := binary.BigEndian.Uint32(data[1:5]) + 1
+	return pktLen == uint32(len(data))
 }
 
 func decodeBindMessage(data []byte) (*bindMessage, error) {
@@ -267,8 +279,6 @@ func isErrorMessage(data []byte) bool {
 	pktLen := binary.BigEndian.Uint32(data[1:5]) + 1
 	return pktLen == uint32(len(data))
 }
-
-
 
 // isCancelRequest возвращает true если пакет является CancelRequest.
 // CancelRequest не содержит тип пакета в заголовке.

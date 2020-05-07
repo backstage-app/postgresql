@@ -2,11 +2,19 @@ package postgresql
 
 import (
 	"errors"
+	"github.com/golang-collections/collections/stack"
 	"io"
 	"log"
 	"net"
 	"time"
 )
+
+type state struct {
+	bind     *bindMessage
+	parse    *parseMessage
+	error    *errorMessage
+	complete *commandCompleteMessage
+}
 
 type QueryWriter interface {
 	Write(q *Query)
@@ -26,6 +34,7 @@ type Proxy struct {
 	source string
 	target string
 	writer QueryWriter
+	conns  map[uint32]*stack.Stack
 }
 
 // NewProxy creates new instance of Proxy
@@ -49,6 +58,7 @@ func (p *Proxy) Run() error {
 	if len(p.source) == 0 || len(p.target) == 0 {
 		return errors.New("postgresql.Proxy.Run: source or target missing")
 	}
+
 	go func() {
 		listener, err := net.Listen("tcp", p.source)
 		if err != nil {
@@ -102,6 +112,10 @@ func (p *Proxy) handleConnection(in io.ReadWriteCloser) {
 func (p *Proxy) proxyTraffic(client, server io.ReadWriteCloser) error {
 	p.connId++
 
+	if _, ok := p.conns[p.connId]; !ok {
+		p.conns[p.connId] = stack.New()
+	}
+
 	requestCollector := &collector{p, originFrontend, packetBuilder{}}
 	responseCollector := &collector{p, originBackend, packetBuilder{}}
 
@@ -133,14 +147,25 @@ func (c *collector) Write(p []byte) (n int, err error) {
 		println(err)
 	}
 	if packet != nil {
-		for _, _ = range packet.messages() {
-			c.proxy.writer.Write(&Query{})
-			//switch m := message.(type) {
-			//case parseMessage:
-			//
-			//case errorMessage:
-			//
-			//}
+		for _, message := range packet.messages() {
+			switch m := message.(type) {
+			case *parseMessage:
+				c.proxy.conns[c.proxy.connId].Push(state{
+					bind:     nil,
+					parse:    m,
+					error:    nil,
+					complete: nil,
+				})
+			case *bindMessage:
+				state := c.proxy.conns[c.proxy.connId].Peek().(state)
+				state.bind = m
+			case *errorMessage:
+				state := c.proxy.conns[c.proxy.connId].Peek().(state)
+				state.error = m
+			case *commandCompleteMessage:
+				state := c.proxy.conns[c.proxy.connId].Pop().(state)
+				c.proxy.writer.Write(&Query{Query: state.parse.query})
+			}
 		}
 	}
 	return len(p), nil
