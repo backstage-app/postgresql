@@ -158,13 +158,13 @@ func (c *collector) Write(p []byte) (n int, err error) {
 					complete: nil,
 				})
 			case *bindMessage:
-				state := c.proxy.conns[c.proxy.connId].Peek().(state)
+				state := c.proxy.conns[c.proxy.connId].Peek().(*state)
 				state.bind = m
 			case *errorMessage:
-				state := c.proxy.conns[c.proxy.connId].Peek().(state)
+				state := c.proxy.conns[c.proxy.connId].Peek().(*state)
 				state.error = m
 			case *commandCompleteMessage:
-				state := c.proxy.conns[c.proxy.connId].Pop().(state)
+				state := c.proxy.conns[c.proxy.connId].Pop().(*state)
 				state.complete = m
 				c.proxy.writer.Write(&Query{Query: state.parse.query})
 			}
