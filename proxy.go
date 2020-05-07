@@ -7,6 +7,10 @@ import (
 	"net"
 )
 
+type QueryWriter interface {
+	Write(q *Query)
+}
+
 type Query struct {
 	Type         string
 	Query        string
@@ -16,15 +20,15 @@ type Query struct {
 
 // Proxy ...
 type Proxy struct {
-	connId  uint32
-	source  string
-	target  string
-	queries chan Query
+	connId uint32
+	source string
+	target string
+	writer QueryWriter
 }
 
 // NewProxy creates new instance of Proxy
-func NewProxy() *Proxy {
-	return &Proxy{}
+func NewProxy(w QueryWriter) *Proxy {
+	return &Proxy{writer: w}
 }
 
 func (p *Proxy) From(source string) *Proxy {
@@ -39,13 +43,10 @@ func (p *Proxy) To(target string) *Proxy {
 
 // Run runs Proxy server on specified port and handles each incoming
 // tcp connection in separate goroutine.
-func (p *Proxy) Run() (chan Query, error) {
+func (p *Proxy) Run() error {
 	if len(p.source) == 0 || len(p.target) == 0 {
-		return nil, errors.New("proxy.Run: source or target missing")
+		return errors.New("postgresql.Proxy.Run: source or target missing")
 	}
-
-	p.queries = make(chan Query)
-
 	go func() {
 		listener, err := net.Listen("tcp", p.source)
 		if err != nil {
@@ -66,8 +67,7 @@ func (p *Proxy) Run() (chan Query, error) {
 			go p.handleConnection(client)
 		}
 	}()
-
-	return p.queries, nil
+	return nil
 }
 
 // handleConnection makes connection to target host per each incoming tcp connection
@@ -132,12 +132,12 @@ func (c *collector) Write(p []byte) (n int, err error) {
 	}
 	if packet != nil {
 		for _, _ = range packet.messages() {
-			c.proxy.queries <- Query{}
+			c.proxy.writer.Write(&Query{})
 			//switch m := message.(type) {
 			//case parseMessage:
-				//
+			//
 			//case errorMessage:
-				//
+			//
 			//}
 		}
 	}
