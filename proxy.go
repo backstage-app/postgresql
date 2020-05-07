@@ -113,6 +113,7 @@ func (p *Proxy) proxyTraffic(client, server io.ReadWriteCloser) error {
 	p.connId++
 
 	if _, ok := p.conns[p.connId]; !ok {
+		p.conns = make(map[uint32]*stack.Stack)
 		p.conns[p.connId] = stack.New()
 	}
 
