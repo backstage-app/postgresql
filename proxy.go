@@ -151,7 +151,7 @@ func (c *collector) Write(p []byte) (n int, err error) {
 		for _, message := range packet.messages() {
 			switch m := message.(type) {
 			case *parseMessage:
-				c.proxy.conns[c.proxy.connId].Push(state{
+				c.proxy.conns[c.proxy.connId].Push(&state{
 					bind:     nil,
 					parse:    m,
 					error:    nil,
@@ -165,6 +165,7 @@ func (c *collector) Write(p []byte) (n int, err error) {
 				state.error = m
 			case *commandCompleteMessage:
 				state := c.proxy.conns[c.proxy.connId].Pop().(state)
+				state.complete = m
 				c.proxy.writer.Write(&Query{Query: state.parse.query})
 			}
 		}
