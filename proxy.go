@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 )
 
 type QueryWriter interface {
@@ -15,6 +16,7 @@ type Query struct {
 	Type         string
 	Query        string
 	Error        string
+	Time         time.Time
 	RowsAffected uint
 }
 

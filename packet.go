@@ -32,7 +32,8 @@ func (p *packet) messages() []interface{} {
 		offset = offset + pktLen
 
 		if p.Origin == originFrontend && isParseMessage(packet) {
-			messages = append(messages, decodeParseMessage(packet))
+			msg, _ := decodeParseMessage(packet)
+			messages = append(messages, msg)
 			continue
 		}
 		if p.Origin == originBackend && isErrorMessage(packet) {
