@@ -132,6 +132,7 @@ func (c *collector) Write(p []byte) (n int, err error) {
 	}
 	if packet != nil {
 		for _, _ = range packet.messages() {
+			c.proxy.queries <- Query{}
 			//switch m := message.(type) {
 			//case parseMessage:
 				//
