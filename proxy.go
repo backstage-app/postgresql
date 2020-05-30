@@ -1,8 +1,8 @@
 package postgresql
 
 import (
+	"container/list"
 	"errors"
-	"github.com/golang-collections/collections/stack"
 	"io"
 	"log"
 	"net"
@@ -34,7 +34,7 @@ type Proxy struct {
 	source string
 	target string
 	writer QueryWriter
-	conns  map[uint32]*stack.Stack
+	conns  map[uint32]*list.List
 }
 
 // NewProxy creates new instance of Proxy
@@ -110,15 +110,10 @@ func (p *Proxy) handleConnection(in io.ReadWriteCloser) {
 
 // proxyTraffic ...
 func (p *Proxy) proxyTraffic(client, server io.ReadWriteCloser) error {
-	p.connId++
+	list := list.New()
 
-	if _, ok := p.conns[p.connId]; !ok {
-		p.conns = make(map[uint32]*stack.Stack)
-		p.conns[p.connId] = stack.New()
-	}
-
-	requestCollector := &collector{p, originFrontend, packetBuilder{}}
-	responseCollector := &collector{p, originBackend, packetBuilder{}}
+	requestCollector := &collector{p, originFrontend, packetBuilder{}, list}
+	responseCollector := &collector{p, originBackend, packetBuilder{}, list}
 
 	// Copy bytes from client to server
 	go func() {
@@ -140,6 +135,7 @@ type collector struct {
 	proxy   *Proxy
 	origin  byte
 	builder packetBuilder
+	list    *list.List
 }
 
 func (c *collector) Write(p []byte) (n int, err error) {
@@ -151,22 +147,35 @@ func (c *collector) Write(p []byte) (n int, err error) {
 		for _, message := range packet.messages() {
 			switch m := message.(type) {
 			case *parseMessage:
-				c.proxy.conns[c.proxy.connId].Push(&state{
-					bind:     nil,
+				// Sometimes frontend may send parse message with empty query
+				// and backend doesn't respond with CommandComplete message to it.
+				// So lets skip such parse messages.
+				if len(m.query) == 0 {
+					continue
+				}
+				c.list.PushBack(&state{
 					parse:    m,
-					error:    nil,
 					complete: nil,
 				})
 			case *bindMessage:
-				state := c.proxy.conns[c.proxy.connId].Peek().(*state)
-				state.bind = m
+				if back := c.list.Back(); back != nil {
+					state := back.Value.(*state)
+					state.bind = m
+				}
 			case *errorMessage:
-				state := c.proxy.conns[c.proxy.connId].Peek().(*state)
-				state.error = m
+				if front := c.list.Front(); front != nil {
+					state := front.Value.(*state)
+					state.error = m
+					c.proxy.writer.Write(&Query{Query: state.parse.query, Error: state.error.message})
+					c.list.Remove(front)
+				}
 			case *commandCompleteMessage:
-				state := c.proxy.conns[c.proxy.connId].Pop().(*state)
-				state.complete = m
-				c.proxy.writer.Write(&Query{Query: state.parse.query})
+				if front := c.list.Front(); front != nil {
+					state := front.Value.(*state)
+					state.complete = m
+					c.proxy.writer.Write(&Query{Query: state.parse.query})
+					c.list.Remove(front)
+				}
 			}
 		}
 	}
